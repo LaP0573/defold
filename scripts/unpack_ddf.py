@@ -21,67 +21,69 @@
 # API:
 # https://googleapis.dev/python/protobuf/latest/google/protobuf/message.html
 
+import importlib
 import os, sys
 
-try:
-    from google.protobuf import text_format
-except:
+def add_dynamo_python_paths():
     dynamo_home = os.environ.get('DYNAMO_HOME')
-    sys.path.append(os.path.join(dynamo_home, "lib", "python"))
-    sys.path.append(os.path.join(dynamo_home, "ext", "lib", "python"))
+    if not dynamo_home:
+        print("Error: DYNAMO_HOME is not set", file=sys.stderr)
+        sys.exit(1)
+
+    python_paths = [
+        os.path.join(dynamo_home, "lib", "python"),
+        os.path.join(dynamo_home, "ext", "lib", "python"),
+    ]
+    for path in reversed(python_paths):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+add_dynamo_python_paths()
 
 from google.protobuf import text_format
 import google.protobuf.message
 
-import lz4.block
 import binascii
+import dlib
 
-import gameobject.gameobject_ddf_pb2
-import gameobject.lua_ddf_pb2
-import input.input_ddf_pb2
-import gamesys.model_ddf_pb2
-import gamesys.texture_set_ddf_pb2
-import graphics.graphics_ddf_pb2
 import resource.liveupdate_ddf_pb2
-import rig.rig_ddf_pb2
-import render.material_ddf_pb2
-import render.font_ddf_pb2
-import render.render_ddf_pb2
-import render.compute_ddf_pb2
-import particle.particle_ddf_pb2
-import gamesys.sprite_ddf_pb2
-import gamesys.physics_ddf_pb2
-import gamesys.gui_ddf_pb2
-import gamesys.label_ddf_pb2
-import gamesys.camera_ddf_pb2
 
-BUILDERS = {}
-BUILDERS['.animationsetc']  = rig.rig_ddf_pb2.AnimationSet
-BUILDERS['.collectionc']    = gameobject.gameobject_ddf_pb2.CollectionDesc
-BUILDERS['.collisionobjectc'] = gamesys.physics_ddf_pb2.CollisionObjectDesc
-BUILDERS['.computec']         = render.compute_ddf_pb2.ComputeDesc
-BUILDERS['.convexshapec']   = gamesys.physics_ddf_pb2.ConvexShape
-BUILDERS['.dmanifest']      = resource.liveupdate_ddf_pb2.ManifestFile
-BUILDERS['.fontc']          = render.font_ddf_pb2.FontMap
-BUILDERS['.gamepadsc']      = input.input_ddf_pb2.GamepadMaps
-BUILDERS['.glyph_bankc']    = render.font_ddf_pb2.GlyphBank
-BUILDERS['.goc']            = gameobject.gameobject_ddf_pb2.PrototypeDesc
-BUILDERS['.guic']           = gamesys.gui_ddf_pb2.SceneDesc
-BUILDERS['.input_bindingc'] = input.input_ddf_pb2.InputBinding
-BUILDERS['.luac']           = gameobject.lua_ddf_pb2.LuaModule
-BUILDERS['.labelc']         = gamesys.label_ddf_pb2.LabelDesc
-BUILDERS['.materialc']      = render.material_ddf_pb2.MaterialDesc
-BUILDERS['.meshsetc']       = rig.rig_ddf_pb2.MeshSet
-BUILDERS['.modelc']         = gamesys.model_ddf_pb2.Model
-BUILDERS['.particlefxc']    = particle.particle_ddf_pb2.ParticleFX
-BUILDERS['.renderc']        = render.render_ddf_pb2.RenderPrototypeDesc
-BUILDERS['.rigscenec']      = rig.rig_ddf_pb2.RigScene
-BUILDERS['.skeletonc']      = rig.rig_ddf_pb2.Skeleton
-BUILDERS['.spc']            = graphics.graphics_ddf_pb2.ShaderDesc
-BUILDERS['.spritec']        = gamesys.sprite_ddf_pb2.SpriteDesc
-BUILDERS['.texturec']       = graphics.graphics_ddf_pb2.TextureImage
-BUILDERS['.texturesetc']    = gamesys.texture_set_ddf_pb2.TextureSet
-BUILDERS['.camerac']        = gamesys.camera_ddf_pb2.CameraDesc
+BUILDER_TYPES = {}
+BUILDER_TYPES['.animationsetc']  = ('rig.rig_ddf_pb2', 'AnimationSet')
+BUILDER_TYPES['.collectionc']    = ('gameobject.gameobject_ddf_pb2', 'CollectionDesc')
+BUILDER_TYPES['.collisionobjectc'] = ('gamesys.physics_ddf_pb2', 'CollisionObjectDesc')
+BUILDER_TYPES['.computec']         = ('render.compute_ddf_pb2', 'ComputeDesc')
+BUILDER_TYPES['.convexshapec']   = ('gamesys.physics_ddf_pb2', 'ConvexShape')
+BUILDER_TYPES['.dmanifest']      = ('resource.liveupdate_ddf_pb2', 'ManifestFile')
+BUILDER_TYPES['.fontc']          = ('render.font_ddf_pb2', 'FontMap')
+BUILDER_TYPES['.gamepadsc']      = ('input.input_ddf_pb2', 'GamepadMaps')
+BUILDER_TYPES['.glyph_bankc']    = ('render.font_ddf_pb2', 'GlyphBank')
+BUILDER_TYPES['.goc']            = ('gameobject.gameobject_ddf_pb2', 'PrototypeDesc')
+BUILDER_TYPES['.guic']           = ('gamesys.gui_ddf_pb2', 'SceneDesc')
+BUILDER_TYPES['.input_bindingc'] = ('input.input_ddf_pb2', 'InputBinding')
+BUILDER_TYPES['.luac']           = ('gameobject.lua_ddf_pb2', 'LuaModule')
+BUILDER_TYPES['.labelc']         = ('gamesys.label_ddf_pb2', 'LabelDesc')
+BUILDER_TYPES['.materialc']      = ('render.material_ddf_pb2', 'MaterialDesc')
+BUILDER_TYPES['.meshsetc']       = ('rig.rig_ddf_pb2', 'MeshSet')
+BUILDER_TYPES['.modelc']         = ('gamesys.model_ddf_pb2', 'Model')
+BUILDER_TYPES['.particlefxc']    = ('particle.particle_ddf_pb2', 'ParticleFX')
+BUILDER_TYPES['.renderc']        = ('render.render_ddf_pb2', 'RenderPrototypeDesc')
+BUILDER_TYPES['.rigscenec']      = ('rig.rig_ddf_pb2', 'RigScene')
+BUILDER_TYPES['.skeletonc']      = ('rig.rig_ddf_pb2', 'Skeleton')
+BUILDER_TYPES['.spc']            = ('graphics.graphics_ddf_pb2', 'ShaderDesc')
+BUILDER_TYPES['.spritec']        = ('gamesys.sprite_ddf_pb2', 'SpriteDesc')
+BUILDER_TYPES['.texturec']       = ('graphics.graphics_ddf_pb2', 'TextureImage')
+BUILDER_TYPES['.texturesetc']    = ('gamesys.texture_set_ddf_pb2', 'TextureSet')
+BUILDER_TYPES['.camerac']        = ('gamesys.camera_ddf_pb2', 'CameraDesc')
+
+def get_builder(ext):
+    builder_type = BUILDER_TYPES.get(ext, None)
+    if builder_type is None:
+        return None
+
+    module_name, class_name = builder_type
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)
 
 proto_type_to_string_map = {}
 proto_type_to_string_map[google.protobuf.descriptor.FieldDescriptor.TYPE_BOOL]    = 'TYPE_BOOL'
@@ -282,11 +284,11 @@ if __name__ == "__main__":
             decompressed_size = len(content) * 2
             while True:
                 try:
-                    content = lz4.block.decompress(content, uncompressed_size=decompressed_size, return_bytearray=True)
+                    content = dlib.dmLZ4DecompressBuffer(content, decompressed_size)
                     break
-                except lz4.block.LZ4BlockError:
+                except Exception:
                     decompressed_size *= 2
-        builder = BUILDERS.get(ext, None)
+        builder = get_builder(ext)
         if builder is None:
             print("No builder registered for filetype %s" %ext)
             try:

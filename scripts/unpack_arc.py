@@ -15,17 +15,26 @@
 
 import os, sys
 
-try:
-    from google.protobuf import text_format
-except:
+def add_dynamo_python_paths():
     dynamo_home = os.environ.get('DYNAMO_HOME')
-    sys.path.append(os.path.join(dynamo_home, "lib", "python"))
-    sys.path.append(os.path.join(dynamo_home, "ext", "lib", "python"))
+    if not dynamo_home:
+        print("Error: DYNAMO_HOME is not set", file=sys.stderr)
+        sys.exit(1)
+
+    python_paths = [
+        os.path.join(dynamo_home, "lib", "python"),
+        os.path.join(dynamo_home, "ext", "lib", "python"),
+    ]
+    for path in reversed(python_paths):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+add_dynamo_python_paths()
 
 import struct
 import hashlib
 import optparse
-import lz4.block
+import dlib
 import resource.liveupdate_ddf_pb2
 
 import traceback
@@ -160,7 +169,7 @@ if __name__ == "__main__":
                             xtea_decryptCTR(bytearray(b'aQj8CScgNP4VsfXK'), data)
                         if compressed_size != -1:
                             if options.uncompress:
-                                data = lz4.block.decompress(data, uncompressed_size)
+                                data = dlib.dmLZ4DecompressBuffer(data, uncompressed_size)
                             else:
                                 url += ".lz4";
 
@@ -176,5 +185,3 @@ if __name__ == "__main__":
                     print("Found %s %d-%d(%d) [Compressed%s]" % (url, offset, size, compressed_size, " Encrypted" if flags & 1 else ""))
                 else:
                     print("Found %s %d-%d%s" % (url, offset, size, " [Encrypted]" if flags & 1 else ""))
-
-
